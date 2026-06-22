@@ -78,7 +78,7 @@ def _run_oda_direct(oda_exe: str, input_dir: str, output_dir: str,
 
 def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str, 
                         oda_path: str, keep_dxf: bool = False, 
-                        explode_inserts: bool = True) -> tuple[bool, str]:
+                        explode_inserts: bool = True, target_font: str = "msgothic.ttc") -> tuple[bool, str]:
     """
     Converts a single JWW file to DWG.
     
@@ -130,9 +130,22 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
     try:
         import ezdxf
         doc = ezdxf.readfile(str(dxf_path))
-        # Update text style font to msgothic.ttc for AutoCAD Japanese support
+        
+        # 1. Update text style font to user selected font (for Japanese/Vietnamese support)
         for style in doc.styles:
-            style.dxf.font = "msgothic.ttc"
+            style.dxf.font = target_font
+            
+        # 2. Forcefully explode remaining block references if requested
+        if explode_inserts:
+            inserts = list(doc.modelspace().query('INSERT'))
+            while inserts:
+                insert = inserts.pop()
+                try:
+                    new_entities = insert.explode()
+                    inserts.extend([e for e in new_entities if e.dxftype() == 'INSERT'])
+                except Exception:
+                    pass
+                    
         doc.saveas(str(dxf_path))
     except Exception as e:
         if dxf_path.exists() and not keep_dxf:

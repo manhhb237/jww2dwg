@@ -20,6 +20,7 @@ TRANSLATIONS = {
         "browse": "...",
         "settings": "Cài đặt",
         "dwg_version": "Phiên bản:",
+        "font_label": "Font xuất:",
         "oda_path": "ODA path:",
         "oda_detected": "✓ OK",
         "oda_missing": "⚠ Thiếu ODA (chỉ xuất DXF)",
@@ -50,6 +51,7 @@ TRANSLATIONS = {
         "browse": "...",
         "settings": "設定",
         "dwg_version": "バージョン:",
+        "font_label": "フォント:",
         "oda_path": "ODAパス:",
         "oda_detected": "✓ OK",
         "oda_missing": "⚠ ODAなし (DXFのみ)",
@@ -81,8 +83,8 @@ class Jww2DwgApp(tk.Tk):
         self.load_config()
         
         self.title(TRANSLATIONS[self.lang]["title"])
-        self.geometry("680x520")
-        self.minsize(580, 420)
+        self.geometry("680x560")
+        self.minsize(580, 480)
         
         sv_ttk.set_theme("dark")
         self.style = ttk.Style(self)
@@ -106,6 +108,7 @@ class Jww2DwgApp(tk.Tk):
         self.input_dir = ""
         self.output_dir = ""
         self.dwg_version = "R2018"
+        self.font_name = "msgothic.ttc"
         self.oda_path = converter.find_oda_converter()
         self.keep_dxf = False
         self.explode_inserts = True
@@ -117,6 +120,7 @@ class Jww2DwgApp(tk.Tk):
                     self.input_dir = d.get("input_dir", "")
                     self.output_dir = d.get("output_dir", "")
                     self.dwg_version = d.get("dwg_version", "R2018")
+                    self.font_name = d.get("font_name", "msgothic.ttc")
                     self.oda_path = d.get("oda_path", self.oda_path)
                     self.keep_dxf = d.get("keep_dxf", False)
                     self.explode_inserts = d.get("explode_inserts", True)
@@ -128,6 +132,7 @@ class Jww2DwgApp(tk.Tk):
                 json.dump({
                     "lang": self.lang, "input_dir": self.input_dir,
                     "output_dir": self.output_dir, "dwg_version": self.dwg_version,
+                    "font_name": self.font_name,
                     "oda_path": self.oda_path, "keep_dxf": self.keep_dxf,
                     "explode_inserts": self.explode_inserts
                 }, f, ensure_ascii=False, indent=2)
@@ -145,6 +150,7 @@ class Jww2DwgApp(tk.Tk):
         self.output_btn.config(text=t["browse"])
         self.settings_lf.config(text=t["settings"])
         self.version_lbl.config(text=t["dwg_version"])
+        self.font_lbl.config(text=t["font_label"])
         self.oda_lbl.config(text=t["oda_path"])
         self.oda_btn.config(text=t["browse"])
         self.dxf_chk.config(text=t["keep_dxf"])
@@ -213,13 +219,14 @@ class Jww2DwgApp(tk.Tk):
         self.output_btn = ttk.Button(folders, text=t["browse"], width=3, command=self.browse_output_dir)
         self.output_btn.grid(row=0, column=5)
 
-        # Settings (compact 2-row grid inside a thin LabelFrame)
+        # Settings (compact 3-row grid inside a thin LabelFrame)
         self.settings_lf = ttk.LabelFrame(top, text=t["settings"])
         self.settings_lf.pack(fill="x", pady=(0, 6))
         sf = ttk.Frame(self.settings_lf)
         sf.pack(fill="x", padx=6, pady=4)
         sf.columnconfigure(5, weight=1)
 
+        # Row 0
         self.version_lbl = ttk.Label(sf, text=t["dwg_version"])
         self.version_lbl.grid(row=0, column=0, sticky="w", padx=(0, 4))
         self.version_var = tk.StringVar(value=self.dwg_version)
@@ -235,6 +242,7 @@ class Jww2DwgApp(tk.Tk):
         self.explode_chk = ttk.Checkbutton(sf, text=t["explode_blocks"], variable=self.explode_var, command=self.on_settings_change)
         self.explode_chk.grid(row=0, column=3, sticky="w")
         
+        # Row 1
         self.oda_lbl = ttk.Label(sf, text=t["oda_path"])
         self.oda_lbl.grid(row=1, column=0, sticky="w", pady=(4, 0), padx=(0, 4))
         self.oda_var = tk.StringVar(value=self.oda_path)
@@ -245,6 +253,15 @@ class Jww2DwgApp(tk.Tk):
         self.oda_btn.grid(row=1, column=4, sticky="w", pady=(4, 0))
         self.oda_status_lbl = ttk.Label(sf, text="", font=("Segoe UI", 8, "bold"))
         self.oda_status_lbl.grid(row=1, column=5, sticky="w", pady=(4, 0), padx=(6, 0))
+        
+        # Row 2 (Font settings)
+        self.font_lbl = ttk.Label(sf, text=t["font_label"])
+        self.font_lbl.grid(row=2, column=0, sticky="w", pady=(4, 0), padx=(0, 4))
+        self.font_var = tk.StringVar(value=self.font_name)
+        self.font_cb = ttk.Combobox(sf, textvariable=self.font_var, values=["msgothic.ttc", "arial.ttf", "romans.shx", "VNI-Times.ttf", "Times New Roman"], width=15)
+        self.font_cb.grid(row=2, column=1, columnspan=2, sticky="w", pady=(4, 0), padx=(0, 12))
+        self.font_cb.bind("<<ComboboxSelected>>", lambda e: self.on_settings_change())
+        self.font_cb.bind("<KeyRelease>", lambda e: self.on_settings_change())
 
         # File list + Log (PanedWindow, resizable)
         pw = ttk.PanedWindow(top, orient="vertical")
@@ -308,6 +325,7 @@ class Jww2DwgApp(tk.Tk):
         self.dwg_version = self.version_var.get()
         self.keep_dxf = self.dxf_var.get()
         self.explode_inserts = self.explode_var.get()
+        self.font_name = self.font_var.get()
         self.save_config()
 
     def check_oda_status(self):
@@ -349,6 +367,7 @@ class Jww2DwgApp(tk.Tk):
         for w in [self.input_btn, self.output_btn, self.oda_btn]:
             w.config(state="disabled")
         self.version_cb.config(state="disabled")
+        self.font_cb.config(state="disabled")
         for w in [self.dxf_chk, self.explode_chk, self.input_entry, self.output_entry, self.oda_entry]:
             w.config(state="disabled")
         self.converting_thread = threading.Thread(target=self._convert_loop, daemon=True)
@@ -369,7 +388,7 @@ class Jww2DwgApp(tk.Tk):
             success, msg = converter.convert_jww_to_dwg(
                 jww_path=fi["path"], output_dir=self.output_dir,
                 dwg_version=self.dwg_version, oda_path=self.oda_path,
-                keep_dxf=self.keep_dxf, explode_inserts=self.explode_inserts)
+                keep_dxf=self.keep_dxf, explode_inserts=self.explode_inserts, target_font=self.font_name)
             
             if success:
                 ok += 1; st = TRANSLATIONS[self.lang]["status_success"]
@@ -387,6 +406,7 @@ class Jww2DwgApp(tk.Tk):
         for w in [self.input_btn, self.output_btn, self.oda_btn]:
             w.config(state="normal")
         self.version_cb.config(state="readonly")
+        self.font_cb.config(state="normal")
         for w in [self.dxf_chk, self.explode_chk, self.input_entry, self.output_entry, self.oda_entry]:
             w.config(state="normal")
         self.write_log(f"Done. OK: {ok}, Fail: {fail}")
