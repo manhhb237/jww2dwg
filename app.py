@@ -11,6 +11,8 @@ import sv_ttk
 import converter
 
 CONFIG_FILE = Path(os.path.expanduser("~")) / ".jww2dwg_config.json"
+CONFIG_VERSION = 2
+DEFAULT_EXPLODE_INSERTS = False
 
 TRANSLATIONS = {
     "vi": {
@@ -81,6 +83,8 @@ class Jww2DwgApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.load_config()
+        if getattr(self, "_config_needs_save", False):
+            self.save_config()
         
         self.title(TRANSLATIONS[self.lang]["title"])
         self.geometry("680x560")
@@ -111,11 +115,13 @@ class Jww2DwgApp(tk.Tk):
         self.font_name = "msgothic.ttc"
         self.oda_path = converter.find_oda_converter()
         self.keep_dxf = False
-        self.explode_inserts = True
+        self.explode_inserts = DEFAULT_EXPLODE_INSERTS
+        self._config_needs_save = False
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     d = json.load(f)
+                    config_version = int(d.get("config_version", 0) or 0)
                     self.lang = d.get("lang", "vi")
                     self.input_dir = d.get("input_dir", "")
                     self.output_dir = d.get("output_dir", "")
@@ -123,13 +129,19 @@ class Jww2DwgApp(tk.Tk):
                     self.font_name = d.get("font_name", "msgothic.ttc")
                     self.oda_path = d.get("oda_path", self.oda_path)
                     self.keep_dxf = d.get("keep_dxf", False)
-                    self.explode_inserts = d.get("explode_inserts", True)
+                    self.explode_inserts = (
+                        d.get("explode_inserts", DEFAULT_EXPLODE_INSERTS)
+                        if config_version >= CONFIG_VERSION
+                        else DEFAULT_EXPLODE_INSERTS
+                    )
+                    self._config_needs_save = config_version < CONFIG_VERSION
             except: pass
                 
     def save_config(self):
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump({
+                    "config_version": CONFIG_VERSION,
                     "lang": self.lang, "input_dir": self.input_dir,
                     "output_dir": self.output_dir, "dwg_version": self.dwg_version,
                     "font_name": self.font_name,
