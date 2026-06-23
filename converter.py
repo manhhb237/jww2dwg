@@ -242,12 +242,13 @@ def _fix_tilted_arcs(doc, jww_path: Path, group_layer_names: dict[tuple[int, int
 
 
 def _apply_layer_group_scaling(doc, layer_scales: dict[str, float]) -> None:
+    """Apply a single global scale (the most common layer-group scale) to all entities."""
     try:
         from ezdxf.math import Matrix44
     except Exception:
         Matrix44 = None
-    doc.header[''] = 4
-    doc.header[''] = 1
+    doc.header['$INSUNITS'] = 4  # millimeters
+    doc.header['$MEASUREMENT'] = 1
     continuous = {'continuous', 'bylayer', 'byblock'}
     from collections import Counter
     scale_counts = Counter()
@@ -274,7 +275,7 @@ def _apply_layer_group_scaling(doc, layer_scales: dict[str, float]) -> None:
 
 def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                         oda_path: str, keep_dxf: bool = False,
-                        explode_inserts: bool = False, target_font: str = "msgothic.ttc") -> tuple[bool, str]:
+                        explode_inserts: bool = False, target_font: str = "yugothic.ttc") -> tuple[bool, str]:
     """
     Converts a single JWW file to DWG.
     
@@ -304,20 +305,44 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
     except Exception as e:
         return False, f"Lỗi kiểm tra định dạng / ファイル検証エラー: {e}"
         
-    # --- Step 2: JWW → DXF via ezjww (pure, untouched) ---
-    # Write DXF directly to output directory (ODA needs input & output folders)
+    # --- Step 2: JWW → DXF via ezjww (with fallback retries) ---
     dxf_filename = f"{base_name}.dxf"
     dxf_path = output_dir_obj / dxf_filename
     
+    dxf_written = False
+    last_error = None
+    
+    # Try 1: normal write_dxf (default max_block_nesting=32)
     try:
-        # Keep ezjww's output as close to the source geometry as possible.
-        # Its INSERT expansion can tessellate ARC entities into many tiny LINEs.
         ezjww.write_dxf(str(jww_path_obj), str(dxf_path), explode_inserts=False)
-    except Exception as e:
+        dxf_written = True
+    except Exception as e1:
+        last_error = e1
+    
+    # Try 2: reduce max_block_nesting to 0 (skip complex nested blocks)
+    if not dxf_written:
+        try:
+            ezjww.write_dxf(str(jww_path_obj), str(dxf_path),
+                            explode_inserts=False, max_block_nesting=0)
+            dxf_written = True
+        except Exception as e2:
+            last_error = e2
+    
+    # Try 3: use read_dxf_string and write manually as last resort
+    if not dxf_written:
+        try:
+            dxf_text = ezjww.read_dxf_string(str(jww_path_obj), False, 0)
+            with open(str(dxf_path), 'w', encoding='utf-8') as f:
+                f.write(dxf_text)
+            dxf_written = True
+        except Exception as e3:
+            last_error = e3
+    
+    if not dxf_written:
         if dxf_path.exists():
             try: dxf_path.unlink()
             except: pass
-        return False, f"Lỗi xuất DXF / DXFエクスポートエラー: {e}"
+        return False, f"Lỗi xuất DXF / DXFエクスポートエラー: {last_error}"
     
     if not dxf_path.exists():
         return False, "ezjww không tạo được file DXF / ezjwwがDXFファイルを生成できませんでした。"
@@ -328,12 +353,12 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
         doc = ezdxf.readfile(str(dxf_path))
         layer_scales, group_layer_names = _layer_group_metadata(jww_path_obj)
         
-        # 1. Update text style font to user selected font (for Japanese/Vietnamese support)
-        font_family = _extended_font_family(target_font)
+        # 1. Force all text styles to 游ゴシック (Yu Gothic) with width factor 0.7
         for style in doc.styles:
-            style.dxf.font = target_font
-            if font_family and hasattr(style, "set_extended_font_data"):
-                style.set_extended_font_data(font_family)
+            style.dxf.font = "yugothic.ttc"
+            style.dxf.width = 0.7
+            if hasattr(style, "set_extended_font_data"):
+                style.set_extended_font_data("Yu Gothic")
             
         # 2. Forcefully explode remaining block references if requested
         if explode_inserts:
