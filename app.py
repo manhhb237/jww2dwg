@@ -76,6 +76,7 @@ TRANSLATIONS = {
         "no_files_found": "JWWファイルなし",
         "stop_btn": "⏹  中止",
         "stopped_msg": "中止しました。",
+    },
     "en": {
         "title": "JWW → DWG Converter",
         "input_dir": "JWW Source:",
