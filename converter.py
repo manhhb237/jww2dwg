@@ -242,31 +242,34 @@ def _fix_tilted_arcs(doc, jww_path: Path, group_layer_names: dict[tuple[int, int
 
 
 def _apply_layer_group_scaling(doc, layer_scales: dict[str, float]) -> None:
-    """Convert JWW paper-scaled layer groups back to real model millimeters."""
     try:
         from ezdxf.math import Matrix44
     except Exception:
         Matrix44 = None
-
-    doc.header["$INSUNITS"] = 4  # millimeters
-    doc.header["$MEASUREMENT"] = 1
-
-    continuous = {"continuous", "bylayer", "byblock"}
+    doc.header[''] = 4
+    doc.header[''] = 1
+    continuous = {'continuous', 'bylayer', 'byblock'}
+    from collections import Counter
+    scale_counts = Counter()
     for entity in doc.modelspace():
         scale = layer_scales.get(entity.dxf.layer, 1.0)
-        if abs(scale - 1.0) < 1e-9:
-            continue
-        if entity.dxf.linetype.lower() not in continuous:
-            try:
-                entity.dxf.ltscale = float(getattr(entity.dxf, "ltscale", 1.0) or 1.0) * scale
-            except Exception:
-                pass
-        if Matrix44 is None:
-            continue
+        scale_counts[scale] += 1
+    global_scale = 1.0
+    if scale_counts:
+        global_scale = scale_counts.most_common(1)[0][0]
+    if Matrix44 is None or abs(global_scale - 1.0) < 1e-9:
+        return
+    m = Matrix44.scale(global_scale, global_scale, 1.0)
+    for entity in doc.modelspace():
         try:
-            entity.transform(Matrix44.scale(scale, scale, 1.0))
+            entity.transform(m)
         except Exception:
             pass
+        if getattr(entity.dxf, 'linetype', '').lower() not in continuous:
+            try:
+                entity.dxf.ltscale = float(getattr(entity.dxf, 'ltscale', 1.0) or 1.0) * global_scale
+            except Exception:
+                pass
 
 
 def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
