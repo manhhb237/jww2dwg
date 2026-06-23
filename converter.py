@@ -275,7 +275,7 @@ def _apply_layer_group_scaling(doc, layer_scales: dict[str, float]) -> None:
 
 def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                         oda_path: str, keep_dxf: bool = False,
-                        explode_inserts: bool = False, target_font: str = "yugothic.ttc") -> tuple[bool, str]:
+                        explode_inserts: bool = False, target_font: str = "yumindb.ttf") -> tuple[bool, str]:
     """
     Converts a single JWW file to DWG.
     
@@ -355,10 +355,10 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
         
         # 1. Force all text styles to 游ゴシック (Yu Gothic) with width factor 0.7
         for style in doc.styles:
-            style.dxf.font = "yugothic.ttc"
-            style.dxf.width = 0.7
+            style.dxf.font = "yumindb.ttf"
+            style.dxf.width = 0.8
             if hasattr(style, "set_extended_font_data"):
-                style.set_extended_font_data("Yu Gothic")
+                style.set_extended_font_data("Yu Mincho Demibold")
             
         # 2. Forcefully explode remaining block references if requested
         if explode_inserts:

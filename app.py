@@ -76,6 +76,36 @@ TRANSLATIONS = {
         "no_files_found": "JWWファイルなし",
         "stop_btn": "⏹  中止",
         "stopped_msg": "中止しました。",
+    "en": {
+        "title": "JWW → DWG Converter",
+        "input_dir": "JWW Source:",
+        "output_dir": "DWG Output:",
+        "browse": "...",
+        "settings": "Settings",
+        "dwg_version": "Version:",
+        "font_label": "Export Font:",
+        "oda_path": "ODA path:",
+        "oda_detected": "✓ OK",
+        "oda_missing": "⚠ ODA missing (DXF only)",
+        "keep_dxf": "Keep DXF",
+        "explode_blocks": "Explode Blocks",
+        "files_list": "File List",
+        "col_name": "File Name",
+        "col_size": "Size",
+        "col_status": "Status",
+        "status_ready": "Ready",
+        "status_converting": "Converting...",
+        "status_success": "✓ OK",
+        "status_failed": "✗ Failed",
+        "convert_btn": "▶  START CONVERSION",
+        "console_log": "Log",
+        "clear_log": "Clear",
+        "success_msg": "Done!\nSuccess: {}\nFailed: {}",
+        "select_input_err": "Please select JWW input folder.",
+        "select_output_err": "Please select DWG output folder.",
+        "no_files_found": "No .jww files found.",
+        "stop_btn": "⏹  STOP",
+        "stopped_msg": "Stopped.",
     }
 }
 
@@ -112,7 +142,7 @@ class Jww2DwgApp(tk.Tk):
         self.input_dir = ""
         self.output_dir = ""
         self.dwg_version = "R2018"
-        self.font_name = "msgothic.ttc"
+        self.font_name = "yumindb.ttf"
         self.oda_path = converter.find_oda_converter()
         self.keep_dxf = False
         self.explode_inserts = DEFAULT_EXPLODE_INSERTS
@@ -206,6 +236,7 @@ class Jww2DwgApp(tk.Tk):
         lang_f.pack(side="right")
         ttk.Button(lang_f, text="VN", width=4, command=lambda: self.switch_language("vi")).pack(side="left", padx=1)
         ttk.Button(lang_f, text="JP", width=4, command=lambda: self.switch_language("ja")).pack(side="left", padx=1)
+        ttk.Button(lang_f, text="EN", width=4, command=lambda: self.switch_language("en")).pack(side="left", padx=1)
 
         # Folders row (compact grid)
         folders = ttk.Frame(top)
@@ -270,7 +301,7 @@ class Jww2DwgApp(tk.Tk):
         self.font_lbl = ttk.Label(sf, text=t["font_label"])
         self.font_lbl.grid(row=2, column=0, sticky="w", pady=(4, 0), padx=(0, 4))
         self.font_var = tk.StringVar(value=self.font_name)
-        self.font_cb = ttk.Combobox(sf, textvariable=self.font_var, values=["msgothic.ttc", "arial.ttf", "romans.shx", "VNI-Times.ttf", "Times New Roman"], width=15)
+        self.font_cb = ttk.Combobox(sf, textvariable=self.font_var, values=["yumindb.ttf", "msgothic.ttc", "arial.ttf", "romans.shx", "VNI-Times.ttf", "Times New Roman"], width=15)
         self.font_cb.grid(row=2, column=1, columnspan=2, sticky="w", pady=(4, 0), padx=(0, 12))
         self.font_cb.bind("<<ComboboxSelected>>", lambda e: self.on_settings_change())
         self.font_cb.bind("<KeyRelease>", lambda e: self.on_settings_change())
