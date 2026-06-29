@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from math import pi, radians
 from collections import defaultdict, deque
@@ -35,7 +36,7 @@ def find_oda_converter() -> str:
     return ""
 
 def _run_oda_direct(oda_exe: str, input_dir: str, output_dir: str, 
-                     dwg_version: str, input_filename: str) -> bool:
+                     dwg_version: str, input_filename: str) -> tuple[bool, str]:
     """
     Run ODA File Converter directly via command line.
     ODA syntax: ODAFileConverter "InputFolder" "OutputFolder" ACAD_VER DWG 0 1 "filename"
@@ -68,15 +69,15 @@ def _run_oda_direct(oda_exe: str, input_dir: str, output_dir: str,
         result = subprocess.run(
             cmd, 
             capture_output=True, 
-            timeout=120,
+            timeout=600,
             startupinfo=si,
             creationflags=cf
         )
-        return True
+        return True, "Success"
     except subprocess.TimeoutExpired:
-        return False
-    except Exception:
-        return False
+        return False, "Timeout (Quá thời gian chờ)"
+    except Exception as e:
+        return False, f"Error: {str(e)}"
 
 def _extended_font_family(font_name: str) -> str:
     """Return a TrueType family name for CAD text styles when known."""
@@ -391,35 +392,47 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
     err_file_path = output_dir_obj / f"{base_name}.dwg.err"
     
     try:
-        _run_oda_direct(
-            oda_exe=oda_path,
-            input_dir=str(output_dir_obj),
-            output_dir=str(output_dir_obj),
-            dwg_version=dwg_version,
-            input_filename=dxf_filename
-        )
-        
-        # Wait a bit and check for output
-        import time
-        dwg_success = False
-        for _ in range(10):
-            if final_dwg_path.exists() and final_dwg_path.stat().st_size > 0:
-                dwg_success = True
-                break
-            time.sleep(0.5)
-        
-        if not dwg_success:
+        # ODA File Converter can hang on Unicode/Japanese folder paths.
+        # Run it from ASCII temp folders, then copy the DWG back to the
+        # requested output path.
+        with tempfile.TemporaryDirectory(prefix="jww2dwg_") as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            tmp_input_dir = tmp_root / "in"
+            tmp_output_dir = tmp_root / "out"
+            tmp_input_dir.mkdir()
+            tmp_output_dir.mkdir()
+
+            tmp_dxf_name = "input.dxf"
+            tmp_dwg_path = tmp_output_dir / "input.dwg"
+            tmp_err_path = tmp_output_dir / "input.dwg.err"
+            shutil.copy2(dxf_path, tmp_input_dir / tmp_dxf_name)
+
+            oda_success, oda_err_msg = _run_oda_direct(
+                oda_exe=oda_path,
+                input_dir=str(tmp_input_dir),
+                output_dir=str(tmp_output_dir),
+                dwg_version=dwg_version,
+                input_filename=tmp_dxf_name
+            )
+
+            dwg_success = tmp_dwg_path.exists() and tmp_dwg_path.stat().st_size > 0
+            if dwg_success:
+                shutil.copy2(tmp_dwg_path, final_dwg_path)
+
             # Check if there is an error file
             err_msg = ""
-            if err_file_path.exists():
-                try:
-                    with open(err_file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        lines = f.readlines()
-                        # Extract the last few lines of the error file
-                        err_msg = " ".join([line.strip() for line in lines[-3:] if line.strip()])
-                except:
-                    pass
-            
+            for possible_err_file in (tmp_err_path, err_file_path):
+                if possible_err_file.exists():
+                    try:
+                        with open(possible_err_file, "r", encoding="utf-8", errors="ignore") as f:
+                            lines = f.readlines()
+                            err_msg = " ".join([line.strip() for line in lines[-3:] if line.strip()])
+                    except:
+                        pass
+                    if err_msg:
+                        break
+        
+        if not dwg_success:
             # Clean up files if needed
             if final_dwg_path.exists():
                 try: final_dwg_path.unlink()
@@ -429,6 +442,8 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                 except: pass
                 
             error_details = f": {err_msg}" if err_msg else ""
+            if not oda_success:
+                error_details += f" ({oda_err_msg})"
             return False, f"Lỗi ODA File Converter / ODA変換エラー{error_details}"
         
         # Clean up temporary files on success

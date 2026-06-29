@@ -37,11 +37,13 @@ TRANSLATIONS = {
         "status_success": "✓ OK",
         "status_failed": "✗ Lỗi",
         "convert_btn": "▶  BẮT ĐẦU CHUYỂN ĐỔI",
+        "open_output": "Mở folder kết quả",
         "console_log": "Log",
         "clear_log": "Xóa",
         "success_msg": "Hoàn tất!\nThành công: {}\nThất bại: {}",
         "select_input_err": "Chọn thư mục chứa file JWW.",
         "select_output_err": "Chọn thư mục lưu file DWG.",
+        "open_output_err": "Thư mục kết quả chưa tồn tại.",
         "no_files_found": "Không tìm thấy file .jww.",
         "stop_btn": "⏹  DỪNG",
         "stopped_msg": "Đã dừng.",
@@ -68,11 +70,13 @@ TRANSLATIONS = {
         "status_success": "✓ OK",
         "status_failed": "✗ 失敗",
         "convert_btn": "▶  変換スタート",
+        "open_output": "出力フォルダを開く",
         "console_log": "ログ",
         "clear_log": "消去",
         "success_msg": "完了！\n成功: {}\n失敗: {}",
         "select_input_err": "JWWフォルダを選択",
         "select_output_err": "DWGフォルダを選択",
+        "open_output_err": "出力フォルダが存在しません。",
         "no_files_found": "JWWファイルなし",
         "stop_btn": "⏹  中止",
         "stopped_msg": "中止しました。",
@@ -99,11 +103,13 @@ TRANSLATIONS = {
         "status_success": "✓ OK",
         "status_failed": "✗ Failed",
         "convert_btn": "▶  START CONVERSION",
+        "open_output": "Open output folder",
         "console_log": "Log",
         "clear_log": "Clear",
         "success_msg": "Done!\nSuccess: {}\nFailed: {}",
         "select_input_err": "Please select JWW input folder.",
         "select_output_err": "Please select DWG output folder.",
+        "open_output_err": "Output folder does not exist.",
         "no_files_found": "No .jww files found.",
         "stop_btn": "⏹  STOP",
         "stopped_msg": "Stopped.",
@@ -191,6 +197,7 @@ class Jww2DwgApp(tk.Tk):
         self.output_lbl.config(text=t["output_dir"])
         self.input_btn.config(text=t["browse"])
         self.output_btn.config(text=t["browse"])
+        self.open_output_btn.config(text=t["open_output"])
         self.settings_lf.config(text=t["settings"])
         self.version_lbl.config(text=t["dwg_version"])
         self.font_lbl.config(text=t["font_label"])
@@ -221,8 +228,12 @@ class Jww2DwgApp(tk.Tk):
         
         self.progress_var = tk.DoubleVar(value=0)
         ttk.Progressbar(bot, variable=self.progress_var, mode="determinate").pack(fill="x", pady=(0, 6))
-        self.action_btn = ttk.Button(bot, text=t["convert_btn"], style="Accent.TButton", command=self.toggle_conversion)
-        self.action_btn.pack(fill="x", ipady=6)
+        action_row = ttk.Frame(bot)
+        action_row.pack(fill="x")
+        self.action_btn = ttk.Button(action_row, text=t["convert_btn"], style="Accent.TButton", command=self.toggle_conversion)
+        self.action_btn.pack(side="left", fill="x", expand=True, ipady=6)
+        self.open_output_btn = ttk.Button(action_row, text=t["open_output"], command=self.open_output_folder)
+        self.open_output_btn.pack(side="left", padx=(6, 0), ipady=6)
 
         # ── Top container ──
         top = ttk.Frame(self)
@@ -344,6 +355,16 @@ class Jww2DwgApp(tk.Tk):
         self.log_text.see(tk.END)
     def clear_log(self):
         self.log_text.delete("1.0", tk.END)
+    def open_output_folder(self):
+        t = TRANSLATIONS[self.lang]
+        folder = self.output_var.get().strip() if hasattr(self, "output_var") else self.output_dir
+        if not folder or not os.path.isdir(folder):
+            messagebox.showerror("Error", t["open_output_err"])
+            return
+        try:
+            os.startfile(os.path.normpath(folder))
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
     # ── Browse ──
     def browse_input_dir(self):
