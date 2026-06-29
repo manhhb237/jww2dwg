@@ -23,6 +23,7 @@ TRANSLATIONS = {
         "settings": "Cài đặt",
         "dwg_version": "Phiên bản:",
         "font_label": "Font xuất:",
+        "width_factor": "Width:",
         "oda_path": "ODA path:",
         "oda_detected": "✓ OK",
         "oda_missing": "⚠ Thiếu ODA (chỉ xuất DXF)",
@@ -56,6 +57,7 @@ TRANSLATIONS = {
         "settings": "設定",
         "dwg_version": "バージョン:",
         "font_label": "フォント:",
+        "width_factor": "幅:",
         "oda_path": "ODAパス:",
         "oda_detected": "✓ OK",
         "oda_missing": "⚠ ODAなし (DXFのみ)",
@@ -89,6 +91,7 @@ TRANSLATIONS = {
         "settings": "Settings",
         "dwg_version": "Version:",
         "font_label": "Export Font:",
+        "width_factor": "Width:",
         "oda_path": "ODA path:",
         "oda_detected": "✓ OK",
         "oda_missing": "⚠ ODA missing (DXF only)",
@@ -150,6 +153,7 @@ class Jww2DwgApp(tk.Tk):
         self.output_dir = ""
         self.dwg_version = "R2018"
         self.font_name = "yumindb.ttf"
+        self.text_width_factor = 0.8
         self.oda_path = converter.find_oda_converter()
         self.keep_dxf = False
         self.explode_inserts = DEFAULT_EXPLODE_INSERTS
@@ -164,6 +168,10 @@ class Jww2DwgApp(tk.Tk):
                     self.output_dir = d.get("output_dir", "")
                     self.dwg_version = d.get("dwg_version", "R2018")
                     self.font_name = d.get("font_name", "msgothic.ttc")
+                    try:
+                        self.text_width_factor = min(max(float(d.get("text_width_factor", 0.8)), 0.1), 5.0)
+                    except (TypeError, ValueError):
+                        self.text_width_factor = 0.8
                     self.oda_path = d.get("oda_path", self.oda_path)
                     self.keep_dxf = d.get("keep_dxf", False)
                     self.explode_inserts = (
@@ -181,7 +189,7 @@ class Jww2DwgApp(tk.Tk):
                     "config_version": CONFIG_VERSION,
                     "lang": self.lang, "input_dir": self.input_dir,
                     "output_dir": self.output_dir, "dwg_version": self.dwg_version,
-                    "font_name": self.font_name,
+                    "font_name": self.font_name, "text_width_factor": self.text_width_factor,
                     "oda_path": self.oda_path, "keep_dxf": self.keep_dxf,
                     "explode_inserts": self.explode_inserts
                 }, f, ensure_ascii=False, indent=2)
@@ -201,6 +209,7 @@ class Jww2DwgApp(tk.Tk):
         self.settings_lf.config(text=t["settings"])
         self.version_lbl.config(text=t["dwg_version"])
         self.font_lbl.config(text=t["font_label"])
+        self.width_factor_lbl.config(text=t["width_factor"])
         self.oda_lbl.config(text=t["oda_path"])
         self.oda_btn.config(text=t["browse"])
         self.dxf_chk.config(text=t["keep_dxf"])
@@ -317,6 +326,15 @@ class Jww2DwgApp(tk.Tk):
         self.font_cb.grid(row=2, column=1, columnspan=2, sticky="w", pady=(4, 0), padx=(0, 12))
         self.font_cb.bind("<<ComboboxSelected>>", lambda e: self.on_settings_change())
         self.font_cb.bind("<KeyRelease>", lambda e: self.on_settings_change())
+        self.width_factor_lbl = ttk.Label(sf, text=t["width_factor"])
+        self.width_factor_lbl.grid(row=2, column=3, sticky="w", pady=(4, 0), padx=(0, 4))
+        self.width_factor_var = tk.StringVar(value=f"{self.text_width_factor:.2f}")
+        self.width_factor_spin = ttk.Spinbox(
+            sf, textvariable=self.width_factor_var, from_=0.1, to=5.0,
+            increment=0.05, width=6, command=self.on_settings_change)
+        self.width_factor_spin.grid(row=2, column=4, sticky="w", pady=(4, 0))
+        self.width_factor_spin.bind("<KeyRelease>", lambda e: self.on_settings_change())
+        self.width_factor_spin.bind("<FocusOut>", lambda e: self.normalize_width_factor())
 
         # File list + Log (PanedWindow, resizable)
         pw = ttk.PanedWindow(top, orient="vertical")
@@ -391,6 +409,19 @@ class Jww2DwgApp(tk.Tk):
         self.keep_dxf = self.dxf_var.get()
         self.explode_inserts = self.explode_var.get()
         self.font_name = self.font_var.get()
+        self.text_width_factor = self.parse_width_factor()
+        self.save_config()
+
+    def parse_width_factor(self):
+        raw = self.width_factor_var.get().strip().replace(",", ".")
+        try:
+            return min(max(float(raw), 0.1), 5.0)
+        except (TypeError, ValueError):
+            return self.text_width_factor
+
+    def normalize_width_factor(self):
+        self.text_width_factor = self.parse_width_factor()
+        self.width_factor_var.set(f"{self.text_width_factor:.2f}")
         self.save_config()
 
     def check_oda_status(self):
@@ -433,6 +464,7 @@ class Jww2DwgApp(tk.Tk):
             w.config(state="disabled")
         self.version_cb.config(state="disabled")
         self.font_cb.config(state="disabled")
+        self.width_factor_spin.config(state="disabled")
         for w in [self.dxf_chk, self.explode_chk, self.input_entry, self.output_entry, self.oda_entry]:
             w.config(state="disabled")
         self.converting_thread = threading.Thread(target=self._convert_loop, daemon=True)
@@ -453,7 +485,8 @@ class Jww2DwgApp(tk.Tk):
             success, msg = converter.convert_jww_to_dwg(
                 jww_path=fi["path"], output_dir=self.output_dir,
                 dwg_version=self.dwg_version, oda_path=self.oda_path,
-                keep_dxf=self.keep_dxf, explode_inserts=self.explode_inserts, target_font=self.font_name)
+                keep_dxf=self.keep_dxf, explode_inserts=self.explode_inserts,
+                target_font=self.font_name, text_width_factor=self.text_width_factor)
             
             if success:
                 ok += 1; st = TRANSLATIONS[self.lang]["status_success"]
@@ -472,6 +505,7 @@ class Jww2DwgApp(tk.Tk):
             w.config(state="normal")
         self.version_cb.config(state="readonly")
         self.font_cb.config(state="normal")
+        self.width_factor_spin.config(state="normal")
         for w in [self.dxf_chk, self.explode_chk, self.input_entry, self.output_entry, self.oda_entry]:
             w.config(state="normal")
         self.write_log(f"Done. OK: {ok}, Fail: {fail}")

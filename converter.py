@@ -94,6 +94,8 @@ def _extended_font_family(font_name: str) -> str:
         "times new roman": "Times New Roman",
         "times.ttf": "Times New Roman",
         "vni-times.ttf": "VNI-Times",
+        "yumindb.ttf": "Yu Mincho Demibold",
+        "yu mincho demibold": "Yu Mincho Demibold",
     }
     return mapping.get(normalized, "")
 
@@ -276,7 +278,8 @@ def _apply_layer_group_scaling(doc, layer_scales: dict[str, float]) -> None:
 
 def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                         oda_path: str, keep_dxf: bool = False,
-                        explode_inserts: bool = False, target_font: str = "yumindb.ttf") -> tuple[bool, str]:
+                        explode_inserts: bool = False, target_font: str = "yumindb.ttf",
+                        text_width_factor: float = 0.8) -> tuple[bool, str]:
     """
     Converts a single JWW file to DWG.
     
@@ -354,12 +357,18 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
         doc = ezdxf.readfile(str(dxf_path))
         layer_scales, group_layer_names = _layer_group_metadata(jww_path_obj)
         
-        # 1. Force all text styles to 游ゴシック (Yu Gothic) with width factor 0.7
+        # 1. Apply selected text style font and width factor.
+        font_family = _extended_font_family(target_font)
+        try:
+            text_width_factor = float(text_width_factor)
+        except (TypeError, ValueError):
+            text_width_factor = 0.8
+        text_width_factor = min(max(text_width_factor, 0.1), 5.0)
         for style in doc.styles:
-            style.dxf.font = "yumindb.ttf"
-            style.dxf.width = 0.8
-            if hasattr(style, "set_extended_font_data"):
-                style.set_extended_font_data("Yu Mincho Demibold")
+            style.dxf.font = target_font
+            style.dxf.width = text_width_factor
+            if font_family and hasattr(style, "set_extended_font_data"):
+                style.set_extended_font_data(font_family)
             
         # 2. Forcefully explode remaining block references if requested
         if explode_inserts:
