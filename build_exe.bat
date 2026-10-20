@@ -1,7 +1,12 @@
 @echo off
 echo Building JWW to DWG Converter...
-call ..\venv\Scripts\activate.bat
+cd /d "%~dp0"
+if exist "..\venv\Scripts\activate.bat" (
+    call ..\venv\Scripts\activate.bat
+) else if exist "venv\Scripts\activate.bat" (
+    call venv\Scripts\activate.bat
+)
 pip install pyinstaller
-pyinstaller --noconfirm --windowed --onefile --icon=app_icon.ico --name "JwwToDwgConverter" --collect-all sv_ttk --add-data "app_icon.ico;." app.py
+pyinstaller --noconfirm JWW2DWG_Light.spec
 echo Build complete! Executable is in the 'dist' folder.
 pause

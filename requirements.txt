@@ -1,2 +1,4 @@
 ezjww>=0.2.3
 ezdxf>=1.4.4
+numpy
+sv_ttk

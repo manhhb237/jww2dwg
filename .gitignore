@@ -7,3 +7,4 @@ venv/
 .vscode/
 .idea/
 *.spec
+!JWW2DWG_Light.spec

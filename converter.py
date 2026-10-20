@@ -352,6 +352,7 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
         return False, "ezjww không tạo được file DXF / ezjwwがDXFファイルを生成できませんでした。"
         
     # --- Step 2.5: Sanitize DXF & Set Font Style via ezdxf ---
+    dxf_opt_error = None
     try:
         import ezdxf
         doc = ezdxf.readfile(str(dxf_path))
@@ -381,20 +382,28 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                 except Exception:
                     pass
 
-        _fix_tilted_arcs(doc, jww_path_obj, group_layer_names)
-        _fix_fragmented_linetypes(doc)
-        _apply_layer_group_scaling(doc, layer_scales)
+        try:
+            _fix_tilted_arcs(doc, jww_path_obj, group_layer_names)
+        except Exception:
+            pass
+        try:
+            _fix_fragmented_linetypes(doc)
+        except Exception:
+            pass
+        try:
+            _apply_layer_group_scaling(doc, layer_scales)
+        except Exception:
+            pass
 
         doc.saveas(str(dxf_path))
     except Exception as e:
-        if dxf_path.exists() and not keep_dxf:
-            try: dxf_path.unlink()
-            except: pass
-        return False, f"Lỗi tối ưu hóa DXF / DXF最適化エラー: {e}"
+        dxf_opt_error = str(e)
         
     # --- Step 3: DXF → DWG via ODA File Converter (direct CLI) ---
     if not oda_path or not os.path.exists(oda_path):
         # No ODA: keep DXF as final output
+        if dxf_opt_error:
+            return True, f"Đã xuất sang DXF (Bỏ qua tối ưu: {dxf_opt_error}) / DXF出力完了（最適化スキップ: {dxf_opt_error}）"
         return True, "Đã xuất sang DXF (Không có ODA Converter) / DXFに書き出しました（ODA Converterなし）"
     
     final_dwg_path = output_dir_obj / f"{base_name}.dwg"
@@ -465,6 +474,8 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                 try: dxf_path.unlink()
                 except: pass
                 
+        if dxf_opt_error:
+            return True, f"Chuyển đổi thành công (Bỏ qua tối ưu DXF: {dxf_opt_error}) / 変換完了（DXF最適化スキップ: {dxf_opt_error}）"
         return True, "Chuyển đổi thành công / 変換に成功しました"
         
     except Exception as e:
