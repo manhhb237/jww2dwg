@@ -6,6 +6,8 @@ binaries = []
 hiddenimports = []
 tmp_ret = collect_all('sv_ttk')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ezjww = collect_all('ezjww')
+datas += tmp_ezjww[0]; binaries += tmp_ezjww[1]; hiddenimports += tmp_ezjww[2]
 
 
 a = Analysis(

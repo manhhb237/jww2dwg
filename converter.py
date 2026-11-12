@@ -1,7 +1,9 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import unicodedata
 from pathlib import Path
 from math import pi, radians
 from collections import defaultdict, deque
@@ -98,6 +100,22 @@ def _extended_font_family(font_name: str) -> str:
         "yu mincho demibold": "Yu Mincho Demibold",
     }
     return mapping.get(normalized, "")
+
+
+def _normalize_cad_text(raw_text: str) -> str:
+    """Normalize CAD text: decode unicode escapes, merge split dakuten/kana via NFKC, preserve symbols."""
+    if not raw_text:
+        return raw_text
+    def replace_unicode_escape(m):
+        try:
+            return chr(int(m.group(1), 16))
+        except Exception:
+            return m.group(0)
+    decoded = re.sub(r'\\U\+([0-9A-Fa-f]{4})', replace_unicode_escape, raw_text)
+    decoded = decoded.replace('㎡', '__SQM__').replace('℃', '__DEG__')
+    normalized = unicodedata.normalize('NFKC', decoded)
+    normalized = normalized.replace('__SQM__', '㎡').replace('__DEG__', '℃')
+    return normalized
 
 
 def _entity_display_length(entity) -> float | None:
@@ -279,13 +297,14 @@ def _apply_layer_group_scaling(doc, layer_scales: dict[str, float]) -> None:
 def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
                         oda_path: str, keep_dxf: bool = False,
                         explode_inserts: bool = False, target_font: str = "yumindb.ttf",
-                        text_width_factor: float = 0.8) -> tuple[bool, str]:
+                        text_width_factor: float = 0.8,
+                        text_em_scale: float = 1.364) -> tuple[bool, str]:
     """
     Converts a single JWW file to DWG.
     
     Pipeline:
-    1. ezjww parses JWW → writes DXF without flattening INSERTs/ARCs.
-    2. ezdxf applies text style metadata and optional block explosion.
+    1. ezjww parses JWW → writes DXF without flattening INSERTs/ARCs (with text_em_scale).
+    2. ezdxf applies text style metadata, text normalization (kana/dakuten fix), and optional block explosion.
     3. ODA File Converter converts DXF → DWG.
     """
     jww_path_obj = Path(jww_path)
@@ -318,7 +337,7 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
     
     # Try 1: normal write_dxf (default max_block_nesting=32)
     try:
-        ezjww.write_dxf(str(jww_path_obj), str(dxf_path), explode_inserts=False)
+        ezjww.write_dxf(str(jww_path_obj), str(dxf_path), explode_inserts=False, text_em_scale=text_em_scale)
         dxf_written = True
     except Exception as e1:
         last_error = e1
@@ -327,7 +346,7 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
     if not dxf_written:
         try:
             ezjww.write_dxf(str(jww_path_obj), str(dxf_path),
-                            explode_inserts=False, max_block_nesting=0)
+                            explode_inserts=False, max_block_nesting=0, text_em_scale=text_em_scale)
             dxf_written = True
         except Exception as e2:
             last_error = e2
@@ -335,7 +354,7 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
     # Try 3: use read_dxf_string and write manually as last resort
     if not dxf_written:
         try:
-            dxf_text = ezjww.read_dxf_string(str(jww_path_obj), False, 0)
+            dxf_text = ezjww.read_dxf_string(str(jww_path_obj), False, 0, text_em_scale=text_em_scale)
             with open(str(dxf_path), 'w', encoding='utf-8') as f:
                 f.write(dxf_text)
             dxf_written = True
@@ -370,6 +389,25 @@ def convert_jww_to_dwg(jww_path: str, output_dir: str, dwg_version: str,
             style.dxf.width = text_width_factor
             if font_family and hasattr(style, "set_extended_font_data"):
                 style.set_extended_font_data(font_family)
+
+        # 1.5 Apply text width factor and normalize text contents
+        for entity in doc.modelspace().query('TEXT'):
+            entity.dxf.width = text_width_factor
+            if entity.dxf.text:
+                entity.dxf.text = _normalize_cad_text(entity.dxf.text)
+        for entity in doc.modelspace().query('MTEXT'):
+            if entity.text:
+                entity.text = _normalize_cad_text(entity.text)
+        for block in doc.blocks:
+            if block.name.startswith('*'):
+                continue  # Skip *Model_Space, *Paper_Space etc. already handled
+            for entity in block.query('TEXT'):
+                entity.dxf.width = text_width_factor
+                if entity.dxf.text:
+                    entity.dxf.text = _normalize_cad_text(entity.dxf.text)
+            for entity in block.query('MTEXT'):
+                if entity.text:
+                    entity.text = _normalize_cad_text(entity.text)
             
         # 2. Forcefully explode remaining block references if requested
         if explode_inserts:

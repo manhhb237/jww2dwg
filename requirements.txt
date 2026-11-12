@@ -1,4 +1,4 @@
-ezjww>=0.2.3
+ezjww>=0.7.13
 ezdxf>=1.4.4
 numpy
 sv_ttk
